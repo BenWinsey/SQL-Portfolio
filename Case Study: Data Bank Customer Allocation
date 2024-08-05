@@ -5,7 +5,7 @@ https://8weeksqlchallenge.com/case-study-4/
 -- How many unique customer nodes are there on the Data Bank System?
 select 
 count (distinct NODE_ID) as UniqueNodeID, 
-from TIL_PLAYGROUND.CS4_DATA_BANK.CUSTOMER_NODES;
+from TIL_PLAYGROUND.CS4_DATA_BANK.CUSTOMER_NODES; 
 
 -- What is the number of nodes oper region?
 
