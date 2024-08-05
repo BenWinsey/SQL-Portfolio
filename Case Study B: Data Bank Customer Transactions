@@ -1,0 +1,132 @@
+-- What is the unique count and total amount for each transaction type?
+
+Select 
+TXN_TYPE,
+count(*) as UniqueCount,
+sum(TXN_AMOUNT) as Total
+from TIL_PLAYGROUND.CS4_DATA_BANK.CUSTOMER_TRANSACTIONS
+group by TXN_TYPE;
+
+-- What is the average total historical deposit counts and amounts for all customers?
+with CTE as (
+Select 
+customer_id,
+count(*) as UniqueCount,
+avg(TXN_AMOUNT) as Total
+from TIL_PLAYGROUND.CS4_DATA_BANK.CUSTOMER_TRANSACTIONS
+where txn_type = 'deposit'
+group by customer_id)
+
+Select 
+round(avg(Total), 0),
+round (Avg(uniquecount),0)
+from CTE;
+
+
+-- For each month - how many Data Bank customers make more than 1 deposit and either 1 purchase or 1 withdrawal in a single month?
+
+with CTE as (
+Select 
+customer_id,
+month(txn_date) as Month,
+sum(case
+when txn_type = 'deposit' then 1 else 0 end) as Deposit,
+sum(case
+when txn_type <> 'desosit' then 1 else 0 end) as WithdrawalorPurchase
+from TIL_PLAYGROUND.CS4_DATA_BANK.CUSTOMER_TRANSACTIONS
+group by customer_id, month(txn_date)
+having 
+sum(case when txn_type = 'deposit' then 1 else 0 end) > 1
+and 
+sum(case when txn_type <> 'deposit' then 1 else 0 end) = 1
+)
+
+select 
+count(customer_id) as Count,
+Month
+from CTE
+group by Month;
+
+-- What is the closing balance for each customer at the end of the month?
+
+with CTE as (
+select 
+customer_id,
+txn_date,
+month(txn_date) as TXN_Month,
+Sum((case when txn_type = 'deposit' then txn_amount else 0 end) - (case when txn_type <> 'deposit' then txn_amount else 0 end)) as Balance
+from TIL_PLAYGROUND.CS4_DATA_BANK.CUSTOMER_TRANSACTIONS
+group by customer_id,month(txn_date), txn_date
+order by  month(txn_date), txn_date),
+
+Running_sum as (
+select
+*,
+sum(balance) over (partition by customer_id order by txn_date) as running_sum,
+row_number() over (partition by customer_id, TXN_Month order by txn_date desc) as EOM
+from CTE
+order by txn_date
+)
+
+select 
+customer_id,
+last_day(txn_date, 'month') as End_month,
+Running_sum
+from running_sum
+where EOM = 1;
+
+-- What is the percentage of customers who increase their closing balance by more than 5%?
+
+
+with CTE as (
+select 
+customer_id,
+txn_date,
+DATE_TRUNC('month',txn_date) as TXN_Month,
+Sum((case when txn_type = 'deposit' then txn_amount else 0 end) - (case when txn_type <> 'deposit' then txn_amount else 0 end)) as Balance
+from TIL_PLAYGROUND.CS4_DATA_BANK.CUSTOMER_TRANSACTIONS
+group by customer_id,month(txn_date), txn_date
+order by  month(txn_date), txn_date),
+
+Running_sum as (
+select
+*,
+sum(balance) over (partition by customer_id order by txn_date) as running_sum,
+row_number() over (partition by customer_id, TXN_Month order by txn_date desc) as EOM
+from CTE
+order by txn_date
+),
+
+Closing_date as (
+select 
+customer_id,
+dateadd('day', -1, dateadd('month', 1, txn_month)) as End_Month,
+dateadd('day', -1, TXN_Month) as previous_month,
+Running_sum
+from running_sum
+where EOM = 1
+order by End_Month),
+
+
+
+Final as (
+select 
+CB1.Customer_id,
+CB1.End_Month,
+CB1.Running_Sum,
+CB2.End_Month as Next_Month,
+CB2.Running_Sum as Next_Month_Balance,
+((CB2.Running_Sum/CB1.Running_Sum) -1) as PIncrease,
+case when (CB2.Running_Sum >CB1.Running_Sum and
+((CB2.Running_Sum/CB1.Running_Sum) -1) >0.05) then 1 else 0 
+end as percentage
+from
+closing_date as CB1
+inner join closing_date as CB2
+on CB1.End_Month = CB2.previous_month
+and CB1.Customer_id = CB2.Customer_id
+where CB1.Running_Sum <>0)
+
+select 
+(SUM(percentage) / COUNT(percentage)) as Total_Customers_Exceeding_5Percentage_Increase
+from Final
