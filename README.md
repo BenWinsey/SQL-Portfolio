@@ -1,0 +1,1 @@
+Here I will be participating in SQL challenges found on the internet to test fundemental and expert level SQL skills, ultimately for the purpose of designing data which is ready for full stack development.
